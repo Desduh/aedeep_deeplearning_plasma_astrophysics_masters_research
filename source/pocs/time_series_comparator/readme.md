@@ -1,4 +1,3 @@
-const readmeContent = `
 # 📊 Comparing Synthetic P-model Data with Real Tokamak Data
 
 **Author:** Carlos Eduardo Falandes
