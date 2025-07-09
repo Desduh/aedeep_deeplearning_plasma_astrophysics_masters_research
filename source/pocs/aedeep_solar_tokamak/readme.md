@@ -44,8 +44,8 @@ AEDeep-Disruption-Prediction/
 2. Clone the repository:
 
 ```bash
-git clone https://github.com/Desduh/AEDeep-Disruption-Prediction.git
-cd AEDeep-Disruption-Prediction
+git clone https://github.com/Desduh/aedeep_deeplearning_plasma_astrophysics_masters_research.git
+cd aedeep_deeplearning_plasma_astrophysics_masters_research/source/aedeep_solar_tokamak
 ```
 
 3. Create and activate the environment using the `environment.yaml` file:
@@ -121,6 +121,6 @@ Falandes, C. E., Rosa, R. R., et al. (2025).
 
 📧 **Carlos Eduardo Falandes**  
 Email: [carlos.falandes@inpe.br](mailto:carlos.falandes@inpe.br)  
-Project repository: [github.com/Desduh/AEDeep-Disruption-Prediction](https://github.com/Desduh/AEDeep-Disruption-Prediction)
+GitHub repository: [AEDeep – Solar & Tokamak Disruption Prediction](https://github.com/Desduh/aedeep_deeplearning_plasma_astrophysics_masters_research/edit/main/source/pocs/aedeep_solar_tokamak)
 
 ---
