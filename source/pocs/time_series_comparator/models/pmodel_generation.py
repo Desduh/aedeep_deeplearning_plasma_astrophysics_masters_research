@@ -50,13 +50,14 @@ def fractal_spectrum_1d(noValues, slope):
     a[1] = 0
     return a
 
-def generate_and_prepare_series(length, p_value, peak_threshold, norm_percentile=99.0):
+def generate_and_prepare_series(length, p_value, peak_threshold, norm_percentile=99.0, seed=42):
     """
     Generates a p-model series and prepares it for training/evaluation.
     
     Returns:
         pd.DataFrame with 'raw', 'normalized', and 'peak' columns.
     """
+    np.random.seed(seed)  # For reproducibility
     # Generate raw series
     raw_series = pmodel(length, p_value) + 0.01
 

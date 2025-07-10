@@ -9,11 +9,12 @@ from scipy import stats
 from scipy.signal import welch
 
 class TimeSeriesComparator:
-    def __init__(self, series1, series2, series1_name="Series1", series2_name="Series2"):
+    def __init__(self, series1, series2, series1_name="Series1", series2_name="Series2", plot=True):
         self.s1 = np.array(series1)
         self.s2 = np.array(series2)
         self.name1 = series1_name
         self.name2 = series2_name
+        self.plot = plot
 
     def basic_statistics(self, series):
         return {
@@ -31,6 +32,8 @@ class TimeSeriesComparator:
         return stats1, stats2
 
     def plot_distributions(self):
+        if not self.plot:
+            return
         sns.kdeplot(self.s1, label=self.name1)
         sns.kdeplot(self.s2, label=self.name2)
         plt.title("Distribution Comparison")
@@ -45,11 +48,12 @@ class TimeSeriesComparator:
     def plot_fft(self):
         mag1 = self.fft_magnitude(self.s1)
         mag2 = self.fft_magnitude(self.s2)
-        plt.plot(mag1, label=f'{self.name1} FFT Magnitude')
-        plt.plot(mag2, label=f'{self.name2} FFT Magnitude', alpha=0.7)
-        plt.title("FFT Magnitude Comparison")
-        plt.legend()
-        plt.show()
+        if self.plot:
+            plt.plot(mag1, label=f'{self.name1} FFT Magnitude')
+            plt.plot(mag2, label=f'{self.name2} FFT Magnitude', alpha=0.7)
+            plt.title("FFT Magnitude Comparison")
+            plt.legend()
+            plt.show()
 
     def autocorrelation(self, series, nlags=100):
         return acf(series, nlags=nlags, fft=True)
@@ -57,11 +61,12 @@ class TimeSeriesComparator:
     def plot_autocorrelation(self, nlags=100):
         acf1 = self.autocorrelation(self.s1, nlags=nlags)
         acf2 = self.autocorrelation(self.s2, nlags=nlags)
-        plt.plot(acf1, label=f'{self.name1} Autocorrelation')
-        plt.plot(acf2, label=f'{self.name2} Autocorrelation')
-        plt.title("Autocorrelation Comparison")
-        plt.legend()
-        plt.show()
+        if self.plot:
+            plt.plot(acf1, label=f'{self.name1} Autocorrelation')
+            plt.plot(acf2, label=f'{self.name2} Autocorrelation')
+            plt.title("Autocorrelation Comparison")
+            plt.legend()
+            plt.show()
 
     def sample_entropy(self, series):
         return ant.sample_entropy(series)
@@ -143,38 +148,41 @@ class TimeSeriesComparator:
         beta2 = -slope_psd2
 
         # --- Plot ---
-        fig = plt.figure(figsize=(12, 8))
-        gs = fig.add_gridspec(2, 2)
+        if self.plot:
+            fig = plt.figure(figsize=(12, 8))
+            gs = fig.add_gridspec(2, 2)
 
-        ax0 = fig.add_subplot(gs[0, :])
-        ax0.plot(self.s1, label=self.name1)
-        ax0.plot(self.s2, label=self.name2, alpha=0.7)
-        ax0.set_title("Time Series Comparison")
-        ax0.set_xlabel("Time Step")
-        ax0.set_ylabel("Value")
-        ax0.legend()
-        ax0.grid(True)
+            ax0 = fig.add_subplot(gs[0, :])
+            ax0.plot(self.s1, label=self.name1)
+            ax0.plot(self.s2, label=self.name2, alpha=0.7)
+            ax0.set_title("Time Series Comparison")
+            ax0.set_xlabel("Time Step")
+            ax0.set_ylabel("Value")
+            ax0.legend()
+            ax0.grid(True)
 
-        ax1 = fig.add_subplot(gs[1, 0])
-        ax1.loglog(freqs1, psd1, 'o-', label=f'{self.name1} β={beta1:.3f}')
-        ax1.loglog(freqs2, psd2, 'o-', label=f'{self.name2} β={beta2:.3f}', alpha=0.7)
-        ax1.set_title("PSD (Welch)")
-        ax1.set_xlabel("Frequency")
-        ax1.set_ylabel("PSD")
-        ax1.legend()
-        ax1.grid(True, which='both', ls='--')
+            ax1 = fig.add_subplot(gs[1, 0])
+            ax1.loglog(freqs1, psd1, 'o-', label=f'{self.name1} β={beta1:.3f}')
+            ax1.loglog(freqs2, psd2, 'o-', label=f'{self.name2} β={beta2:.3f}', alpha=0.7)
+            ax1.set_title("PSD (Welch)")
+            ax1.set_xlabel("Frequency")
+            ax1.set_ylabel("PSD")
+            ax1.legend()
+            ax1.grid(True, which='both', ls='--')
 
-        ax2 = fig.add_subplot(gs[1, 1])
-        ax2.loglog(s1_scales, s1_fluct, 'o-', label=f'{self.name1} α={slope_dfa1:.3f}')
-        ax2.loglog(s2_scales, s2_fluct, 'o-', label=f'{self.name2} α={slope_dfa2:.3f}', alpha=0.7)
-        ax2.set_title("DFA")
-        ax2.set_xlabel("Window size (n)")
-        ax2.set_ylabel("Fluctuation")
-        ax2.legend()
-        ax2.grid(True, which='both', ls='--')
+            ax2 = fig.add_subplot(gs[1, 1])
+            ax2.loglog(s1_scales, s1_fluct, 'o-', label=f'{self.name1} α={slope_dfa1:.3f}')
+            ax2.loglog(s2_scales, s2_fluct, 'o-', label=f'{self.name2} α={slope_dfa2:.3f}', alpha=0.7)
+            ax2.set_title("DFA")
+            ax2.set_xlabel("Window size (n)")
+            ax2.set_ylabel("Fluctuation")
+            ax2.legend()
+            ax2.grid(True, which='both', ls='--')
 
-        fig.tight_layout()
-        plt.show()
+            fig.tight_layout()
+            plt.show()
+
+        return slope_dfa1, slope_dfa2
 
     # --- Kullback-Leibler divergence ---
 

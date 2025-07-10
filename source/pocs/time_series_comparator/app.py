@@ -1,122 +1,216 @@
-from models.time_series_comparator import TimeSeriesComparator
-from models.pmodel_generation import generate_and_prepare_series
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
+from models.time_series_comparator import TimeSeriesComparator
+from models.pmodel_generation import generate_and_prepare_series
 
-# Load Tokamak data from CSV
-tokamak_path = r"C:\Users\Carlos\Documents\INPE\master\aedeep_deeplearning_plasma_astrophysics_masters_research\source\data\jorek\heat_flux_iter.csv"
-df_tokamak = pd.read_csv(tokamak_path)
+# ===============================
+# Dataset configuration
+# ===============================
+DATASETS = {
+    "tokamak": {
+        "path": r"C:\Users\Carlos\Documents\INPE\master\aedeep_deeplearning_plasma_astrophysics_masters_research\source\data\jorek\heat_flux_iter.csv",
+        "column": "Amplitude",
+        "label": "Tokamak"
+    },
+    "sdo": {
+        "path": r"C:\Users\Carlos\Documents\INPE\master\aedeep_deeplearning_plasma_astrophysics_masters_research\source\data\sdo\sdo_time_series.csv",
+        "column": "Amplitude",
+        "label": "SDO"
+    },
+    "rho": {
+        "path": r"C:\Users\Carlos\Documents\INPE\master\aedeep_deeplearning_plasma_astrophysics_masters_research\source\data\rho\ae_index_normalizado.csv",
+        "column": "norm",
+        "label": "RHO"
+    }
+}
 
-# Extract 'Amplitude' column
-tokamak_series_raw = df_tokamak['Amplitude'].values
+# ===============================
+# Helper functions
+# ===============================
+def load_and_normalize_series(series_key):
+    """
+    Load a time series from CSV and normalize it to [0, 1].
+    """
+    if series_key not in DATASETS:
+        raise ValueError(f"Dataset '{series_key}' is not defined.")
 
-# Normalize Tokamak data to range [0, 1]
-scaler = MinMaxScaler()
-tokamak_series = scaler.fit_transform(tokamak_series_raw.reshape(-1, 1)).flatten()
+    config = DATASETS[series_key]
+    df = pd.read_csv(config["path"])
+    raw_series = df[config["column"]].values
+    scaler = MinMaxScaler()
+    normalized_series = scaler.fit_transform(raw_series.reshape(-1, 1)).flatten()
+    return normalized_series, config["label"]
 
-# Define list of p values to test
-p_values = np.linspace(0.15, 0.45, 10)  # [0.15, 0.20, ..., 0.45]
+def run_comparisons(series_data, series_key, series_label, p_values, plot=True):
+    """
+    Compare a time series with multiple P-models for a range of p values.
+    """
+    results = []
+    for p in p_values:
+        print(f"\n=============================")
+        print(f"🔍 Evaluating P-model with p = {p:.2f}")
 
-# Store results
-results = []
+        # Generate P-model
+        pmodel_df = generate_and_prepare_series(length=len(series_data), p_value=p, peak_threshold=0.5, seed=42)
+        pmodel_series = pmodel_df['normalized'].values
 
-for p in p_values:
-    print(f"\n=============================")
-    print(f"🔍 Evaluating P-model with p = {p:.2f}")
+        # Center both series
+        s1 = series_data - np.mean(series_data)
+        s2 = pmodel_series - np.mean(pmodel_series)
 
-    # Generate P-model series
-    pmodel_df = generate_and_prepare_series(length=len(tokamak_series), p_value=p, peak_threshold=0.5)
-    pmodel_series = pmodel_df['normalized'].values
+        # Create comparator
+        ts_comp = TimeSeriesComparator(s1, s2, series1_name=series_label, series2_name=f"P-model p={p:.2f}", plot=plot)
 
-    # Compare with Tokamak
-    ts_comp = TimeSeriesComparator(tokamak_series, pmodel_series, series1_name="Tokamak", series2_name=f"P-model p={p:.2f}")
+        # Extract metrics
+        stats1, stats2 = ts_comp.compare_basic_stats()
+        ent1, ent2 = ts_comp.compare_entropy()
+        kl_pq, kl_qp = ts_comp.kullback_leibler()
+        dfa_alpha1, dfa_alpha2 = ts_comp.compare_dfa_psd()
 
-    # Generate report
-    stats1, stats2 = ts_comp.compare_basic_stats()
-    ent1, ent2 = ts_comp.compare_entropy()
-    kl_pq, kl_qp = ts_comp.kullback_leibler()  # <<< ADICIONAR ESTA LINHA
+        # Optional: plots
+        ts_comp.display_similarity_report()
+        ts_comp.plot_distributions()
+        ts_comp.plot_fft()
+        ts_comp.plot_autocorrelation()
 
-    # ts_comp.compare_dfa_psd()
-    # ts_comp.display_similarity_report()
-    # ts_comp.plot_distributions()
-    # ts_comp.plot_fft()
-    ts_comp.plot_autocorrelation()
+        # Store result
+        results.append({
+            'p_value': p,
+            f'{series_key}_mean': stats1['mean'],
+            'pmodel_mean': stats2['mean'],
+            f'{series_key}_std': stats1['std'],
+            'pmodel_std': stats2['std'],
+            f'{series_key}_skewness': stats1['skewness'],
+            'pmodel_skewness': stats2['skewness'],
+            f'{series_key}_kurtosis': stats1['kurtosis'],
+            'pmodel_kurtosis': stats2['kurtosis'],
+            f'{series_key}_min': stats1['min'],
+            'pmodel_min': stats2['min'],
+            f'{series_key}_max': stats1['max'],
+            'pmodel_max': stats2['max'],
+            f'{series_key}_entropy': ent1,
+            'pmodel_entropy': ent2,
+            'kl_series_pmodel': kl_pq,
+            'kl_pmodel_series': kl_qp,
+            f'dfa_{series_key}': dfa_alpha1,
+            'dfa_pmodel': dfa_alpha2
+        })
 
-    # Append metrics to results
-    results.append({
-        'p_value': p,
-        'tokamak_mean': stats1['mean'],
-        'pmodel_mean': stats2['mean'],
-        'tokamak_std': stats1['std'],
-        'pmodel_std': stats2['std'],
-        'tokamak_skewness': stats1['skewness'],
-        'pmodel_skewness': stats2['skewness'],
-        'tokamak_kurtosis': stats1['kurtosis'],
-        'pmodel_kurtosis': stats2['kurtosis'],
-        'tokamak_min': stats1['min'],
-        'pmodel_min': stats2['min'],
-        'tokamak_max': stats1['max'],
-        'pmodel_max': stats2['max'],
-        'tokamak_entropy': ent1,
-        'pmodel_entropy': ent2,
-        'kl_tokamak_pmodel': kl_pq,
-        'kl_pmodel_tokamak': kl_qp
-    })
+    return pd.DataFrame(results)
 
-
-# Função para plotar todas as métricas (já existente)
-def plot_all_metrics_vs_p(results_df):
+def plot_all_metrics_vs_p(results_df, series_key):
+    """
+    Plot comparison metrics between the time series and P-models.
+    """
     basic_metrics = ['mean', 'std', 'skewness', 'kurtosis']
     entropy_metric = 'entropy'
-    kl_metrics = ['kl_tokamak_pmodel', 'kl_pmodel_tokamak']
 
-    # Agora o total de métricas:
-    n_metrics = len(basic_metrics) + 1 + 1  # +1 para entropia e +1 para KL divergence
+    n_metrics = len(basic_metrics) + 1 + 1 + 1  # +1 entropy, +1 KL, +1 DFA
     n_cols = 3
     n_rows = (n_metrics + n_cols - 1) // n_cols
 
-    plt.figure(figsize=(5*n_cols, 4*n_rows))
+    plt.figure(figsize=(5 * n_cols, 4 * n_rows))
 
-    # Plot basic metrics
+    # Plot basic stats
     for i, metric in enumerate(basic_metrics):
-        plt.subplot(n_rows, n_cols, i+1)
-        plt.plot(results_df['p_value'], results_df[f'pmodel_{metric}'], marker='o', label='P-model')
-        tok_val = results_df[f'tokamak_{metric}'].iloc[0]
-        plt.axhline(y=tok_val, color='r', linestyle='--', label='Tokamak')
-        plt.title(f'{metric.capitalize()} Comparison')
-        plt.xlabel('p value')
-        plt.ylabel(metric.capitalize())
-        plt.legend()
-        plt.grid(True)
+        ax = plt.subplot(n_rows, n_cols, i + 1)
 
-    # Plot sample entropy
-    plt.subplot(n_rows, n_cols, len(basic_metrics)+1)
-    plt.plot(results_df['p_value'], results_df[f'pmodel_{entropy_metric}'], marker='o', label='P-model')
-    tok_val = results_df[f'tokamak_{entropy_metric}'].iloc[0]
-    plt.axhline(y=tok_val, color='r', linestyle='--', label='Tokamak')
-    plt.title('Sample Entropy Comparison')
-    plt.xlabel('p value')
-    plt.ylabel('Sample Entropy')
-    plt.legend()
-    plt.grid(True)
+        p_vals = results_df['p_value']
+        pmodel_vals = results_df[f'pmodel_{metric}']
+        series_val = results_df[f'{series_key}_{metric}'].iloc[0]
+        abs_diff = np.abs(pmodel_vals - series_val)
 
-    # Plot KL divergences
-    plt.subplot(n_rows, n_cols, len(basic_metrics)+2)
-    plt.plot(results_df['p_value'], results_df['kl_tokamak_pmodel'], marker='o', label='KL Tokamak → P-model')
-    plt.plot(results_df['p_value'], results_df['kl_pmodel_tokamak'], marker='o', label='KL P-model → Tokamak')
-    plt.title('KL Divergence')
-    plt.xlabel('p value')
-    plt.ylabel('KL Divergence')
-    plt.legend()
-    plt.grid(True)
+        ax.plot(p_vals, pmodel_vals, marker='o', label='P-model')
+        ax.axhline(y=series_val, color='r', linestyle='--', label=series_key.capitalize())
+        ax.plot(p_vals, abs_diff, marker='s', linestyle='--', color='black', label='|Diff|')
+
+        ax.set_title(f'{metric.capitalize()} Comparison')
+        if i >= n_metrics - n_cols:
+            ax.set_xlabel('p value')
+        else:
+            ax.set_xticklabels([])
+        ax.set_ylabel(metric.capitalize())
+        ax.legend()
+        ax.grid(True)
+
+    # Plot entropy
+    i = len(basic_metrics)
+    ax = plt.subplot(n_rows, n_cols, i + 1)
+    pmodel_vals = results_df['pmodel_entropy']
+    series_val = results_df[f'{series_key}_entropy'].iloc[0]
+    abs_diff = np.abs(pmodel_vals - series_val)
+
+    ax.plot(results_df['p_value'], pmodel_vals, marker='o', label='P-model')
+    ax.axhline(y=series_val, color='r', linestyle='--', label=series_key.capitalize())
+    ax.plot(results_df['p_value'], abs_diff, marker='s', linestyle='--', color='black', label='|Diff|')
+
+    ax.set_title('Sample Entropy Comparison')
+    if i >= n_metrics - n_cols:
+        ax.set_xlabel('p value')
+    else:
+        ax.set_xticklabels([])
+    ax.set_ylabel('Sample Entropy')
+    ax.legend()
+    ax.grid(True)
+
+    # Plot KL divergence
+    i += 1
+    ax = plt.subplot(n_rows, n_cols, i + 1)
+    ax.plot(results_df['p_value'], results_df['kl_series_pmodel'], marker='o', label='KL Series → P-model')
+    ax.plot(results_df['p_value'], results_df['kl_pmodel_series'], marker='o', label='KL P-model → Series')
+    ax.set_title('KL Divergence')
+    if i >= n_metrics - n_cols:
+        ax.set_xlabel('p value')
+    else:
+        ax.set_xticklabels([])
+    ax.set_ylabel('KL Divergence')
+    ax.legend()
+    ax.grid(True)
+
+    # Plot DFA exponent
+    i += 1
+    ax = plt.subplot(n_rows, n_cols, i + 1)
+    pmodel_vals = results_df['dfa_pmodel']
+    series_val = results_df[f'dfa_{series_key}'].iloc[0]
+    abs_diff = np.abs(pmodel_vals - series_val)
+
+    ax.plot(results_df['p_value'], pmodel_vals, marker='o', label='P-model')
+    ax.axhline(y=series_val, color='r', linestyle='--', label=series_key.capitalize())
+    ax.plot(results_df['p_value'], abs_diff, marker='s', linestyle='--', color='black', label='|Diff|')
+
+    ax.set_title('DFA Exponent (α) Comparison')
+    if i >= n_metrics - n_cols:
+        ax.set_xlabel('p value')
+    else:
+        ax.set_xticklabels([])
+    ax.set_ylabel('DFA α')
+    ax.legend()
+    ax.grid(True)
 
     plt.tight_layout()
     plt.show()
 
-# Salvar resultados e plotar
-results_df = pd.DataFrame(results)
-results_df.to_csv("pmodel_comparison_results.csv", index=False)
-plot_all_metrics_vs_p(results_df)
-print("\n✅ All comparisons completed. Results saved to 'pmodel_comparison_results.csv'.")
+# ===============================
+# Main execution
+# ===============================
+if __name__ == "__main__":
+    # Select series to analyze
+    series_key = "rho"  # Change to 'tokamak' 'sdo' or 'rho'
+
+    # Load and normalize the series
+    series_data, series_label = load_and_normalize_series(series_key)
+
+    # Define p values to test
+    p_values = np.linspace(0.15, 0.45, 10)
+
+    # Run the comparisons
+    results_df = run_comparisons(series_data, series_key, series_label, p_values, plot=True)
+
+    # Save results
+    results_df.to_csv(f"{series_key}_pmodel_comparison_results.csv", index=False)
+    print(f"\n✅ Comparison completed. Results saved to '{series_key}_pmodel_comparison_results.csv'.")
+
+    # Plot results
+    plot_all_metrics_vs_p(results_df, series_key)
